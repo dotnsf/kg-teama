@@ -1,0 +1,363 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3c.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml">
+<head>
+<meta charset="utf9"/>
+<meta http-equiv="pragma" content="no-cache"/>
+<script src="https://code.jquery.com/jquery-2.2.4.min.js"></script>
+<!--
+<link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.1/css/bootstrap.min.css" rel="stylesheet"/>
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.1/js/bootstrap.min.js"></script>
+<link href="https://use.fontawesome.com/releases/v5.15.4/css/all.css" rel="stylesheet"/>
+-->
+
+<script>
+var advices = {
+  '介護': [ '介護支援制度について提案してみてください。', '介護費について助成金' ],
+  '育児': [ '育児支援制度について提案してみてください。', '育児助成金、家賃補助、託児所の手配などについて提案してみてください。' ],
+  'キャリアアップ': [ '希望部署や資格獲得状況を聞いてみてください。' ]
+};
+var keywords = Object.keys( advices );
+
+var flag_speech = 0;
+var flag_debug = true;
+
+function webspeech_function(){
+  $('#start_btn').removeClass( 'btn-primary btn-warning' );
+  $('#start_btn').addClass( 'btn-danger' );
+  $('#start_btn').val( '<i class="fas fa-microphone"></i>' );
+
+  webspeech_recognition_loop();
+}
+
+function webspeech_recognition_loop(){
+  var voice_lang = 'ja';
+
+  //. https://developer.mozilla.org/ja/docs/Web/API/SpeechRecognition
+  window.SpeechRecognition = window.SpeechRecognition || webkitSpeechRecognition;
+  var recognition = new SpeechRecognition(); //webkitSpeechRecognition();
+  recognition.lang = voice_lang;
+  recognition.interimResults = false;
+  recognition.continuous = false;
+
+  recognition.onaudiostart = function(){
+    if( flag_debug ){ console.log( 'onaudiostart' ); }
+  };
+  recognition.onaudioend = function(){
+    if( flag_debug ){ console.log( 'onaudioend' ); }
+  };
+  recognition.onspeechstart = function(){
+    if( flag_debug ){ console.log( 'onspeechstart' ); }
+    console.log( 'speech start...');
+  };
+  recognition.onspeechend = function(){
+    if( flag_debug ){ console.log( 'onspeechend' ); }
+    console.log( '...speech end.');
+
+    //. そのまま続ける場合、
+    webspeech_recognition_loop();
+
+    //. いったん抜ける場合、
+    //$('#start_btn').removeClass( 'btn-primary btn-danger' );
+    //$('#start_btn').addClass( 'btn-warning' );
+    //$('#start_btn').val( '<i class="fas fa-comments"></i>' );
+    //$('#voice-language').attr( 'disabled', false );
+  };
+
+  recognition.onsoundstart = function(){
+    if( flag_debug ){ console.log( 'onsoundstart' ); }
+    //$('#status').val( 'Listening' );
+  };
+  recognition.onnomatch = function(){
+    if( flag_debug ){ console.log( 'onnomatch' ); }
+  };
+  recognition.onerror = function(){
+    if( flag_debug ){ console.log( 'onerror' ); }
+    if( flag_speech == 0 ){
+      webspeech_recognition_loop();
+    }
+  };
+  recognition.onsoundend = function(){
+    if( flag_debug ){ console.log( 'onsoundend' ); }
+
+    //. そのまま続ける場合、
+    webspeech_recognition_loop();
+
+    /*
+    //. いったん抜ける場合、
+    //$('#start_btn').removeClass( 'btn-primary btn-danger' );
+    //$('#start_btn').addClass( 'btn-warning' );
+    //$('#start_btn').val( '<i class="fas fa-comments"></i>' );
+    //$('#voice-language').attr( 'disabled', false );
+    */
+  };
+
+  recognition.onresult = function( event ){
+    if( flag_debug ){ console.log( 'onresult' ); }
+    var results = event.results;
+    for( var i = event.resultIndex; i < results.length; i++ ){
+      var text = results[i][0].transcript;
+      if( results[i].isFinal ){
+        $('#result_text').append( '<div class="balloon-l">' + text + '</div>' );
+        //. speechText( text );
+        
+        var b = -1;
+        for( var i = 0; i < keywords.length && b == -1; i ++ ){
+          b = text.indexOf( keywords[i] );
+          if( b > -1 ){
+            var advice = advices[keywords[i]][0];
+            $('#advice_text').append( '<div class="balloon-r">' + advice + '</div>' );
+          }
+        }
+      }else{
+        //$('#result_text').html( '<div class="balloon-0">' + text + '</div>' );
+        flag_speech = 1;
+      }
+    }
+  }
+  flag_speech = 0;
+  recognition.start();
+}
+
+$(function(){
+  //. 画面のロードと同時に聞き取り開始
+  webspeech_function();
+});
+
+//. 以下、Web Speech 用
+var uttr = null;
+
+function speechText( text ){
+  //. https://web-creates.com/code/js-web-speech-api/
+  if( 'speechSynthesis' in window ){
+    var voices = window.speechSynthesis.getVoices();
+
+    uttr = new SpeechSynthesisUtterance();
+    uttr.text = text;
+    var lang = $('#voice-language').val();  //because AI would be respond in English only.
+    uttr.lang = 'en-US'; //. 'en-US', 'ja-JP';
+
+    $('#start_btn').removeClass( 'btn-primary btn-danger' );
+    $('#start_btn').addClass( 'btn-warning' );
+    $('#start_btn').val( '<i class="fas fa-comments"></i>' );
+
+    window.speechSynthesis.speak( uttr );
+    uttr.onend = speechEnd;
+  }else{
+    alert( 'このブラウザは Web Speech API に未対応です。')
+  }
+}
+
+function speechEnd( evt ){
+  if( flag_debug ){ console.log( 'speechEnd', {evt} ); }
+
+  //. 発声後、すぐに聞き取りモードに入らせる場合
+  webspeech_recognition_loop();
+
+  //. 再度ボタンを押させる場合
+  //$('#start_btn').removeClass( 'btn-warning btn-danger' );
+  //$('#start_btn').addClass( 'btn-primary' );
+  //$('#start_btn').val( '<i class="fas fa-comment-alt"></i>' );
+  //$('#voice-language').attr( 'attr', false );
+}
+</script>
+
+<style>
+/* 吹き出し装飾 */
+.balloon-r, .balloon-l, .balloon-0{
+  position: relative;
+  padding: 20px;
+}
+
+/* 左吹き出し */
+.balloon-l{
+  background-color: #ccf;
+  border: 2px solid #88c;
+}
+
+.balloon-l::before{
+  content: '';
+  position: absolute;
+  display: block;
+  width: 0;
+  height: 0;
+  left: -15px;
+  top: 20px;
+  border-right: 15px solid #88c;
+  border-top: 15px solid transparent;
+  border-bottom: 15px solid transparent;
+}
+
+.balloon-l::after{
+  content: '';
+  position: absolute;
+  display: block;
+  width: 0;
+  height: 0;
+  left: -12px;
+  top: 20px;
+  border-right: 15px solid #ccf;
+  border-top: 15px solid transparent;
+  border-bottom: 15px solid transparent;
+}
+
+/* 右吹き出し */
+.balloon-r{
+  background-color: #fcc;
+  border: 2px solid #c88;
+}
+
+.balloon-r::before{
+  content: '';
+  position: absolute;
+  display: block;
+  width: 0;
+  height: 0;
+  right: -15px;
+  top: 20px;
+  border-left: 15px solid #c88;
+  border-top: 15px solid transparent;
+  border-bottom: 15px solid transparent;
+}
+
+.balloon-r::after{
+  content: '';
+  position: absolute;
+  display: block;
+  width: 0;
+  height: 0;
+  right: -12px;
+  top: 20px;
+  border-left: 15px solid #fcc;
+  border-top: 15px solid transparent;
+  border-bottom: 15px solid transparent;
+}
+
+.balloon-0{
+  background-color: #fcc;
+  border: 2px solid #c88;
+}
+
+.balloon-0::before{
+  content: '';
+  position: absolute;
+  display: block;
+  width: 0;
+  height: 0;
+  right: -15px;
+  top: 20px;
+  border-left: 15px solid #fcc;
+  border-top: 15px solid transparent;
+  border-bottom: 15px solid transparent;
+}
+
+.balloon-0::after{
+  content: '';
+  position: absolute;
+  display: block;
+  width: 0;
+  height: 0;
+  right: -12px;
+  top: 20px;
+  border-left: 15px solid #c88;
+  border-top: 15px solid transparent;
+  border-bottom: 15px solid transparent;
+}
+
+.box{
+  position: relative;
+  width: 800px;
+  height: auto;
+  margin: 0 auto;
+}
+
+.box-bottom{
+  width: 190px;
+}
+
+.box-top{
+  position: absolute;
+  top: 50%;
+  right: 50%;
+  transform: translateY(-50%);
+  width: 100px;
+  height: auto;
+  line-height: 1.5;
+  padding: 20px;
+}
+
+#for-debug{
+  display: none;
+}
+
+#result_texts{
+  height: 300px;
+/*  overflow-x: hidden;
+  overflow-y: scroll; */
+}
+
+.relative{
+  position: relative;
+}
+
+.absolute{
+  position: absolute;
+  right: 50px;
+  bottom: 88px;
+}
+</style>
+
+
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black"/>
+<meta name="apple-mobile-web-app-title" content="WebSpeech"/>
+
+<title>WebSpeech</title>
+</head>
+<body>
+
+  <!--
+<nav class="navbar navbar-expand-lg navbar-light bg-light fixed-top">
+  <a class="navbar-brand" href="#">Title</a>
+
+  <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+    <span class="navbar-toggler-icon"></span>
+  </button>
+  <div class="collapse navbar-collapse" id="navbarSupportedContent">
+    <ul class="navbar-nav mr-auto"></ul>
+  </div>
+</nav>
+-->
+
+<div class="_container" style="width:100%; font-size: 30pt; color:#fff; background-color:#00a2cd; top: 180px; text-align: center;">
+カウンセリング中
+</div>
+
+<div class="container" id="main_div" style="position: relative; top: 80px;">
+  <!--
+  <button class="btn btn-primary" id="start_btn" onClick="webspeech_function();"><i class="fas fa-comment"></i></button>
+  -->
+  <br/>
+  <table class="_table" style="width:100%;">
+    <thead>
+      <tr>
+        <th style="width:50%; text-align: center; color: blue; font-size: 25pt;">会話文</th>
+        <th style="width:50%; text-align: center; color: red; font-size: 25pt;">チャット AI</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <!-- 聞き取った内容をここに表示 -->
+        <td id="result_text">
+        </td>
+        <!-- AI からのアドバイスをここに表示 -->
+        <td id="advice_text">
+        </td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+</div>
+
+</body>
+</html>
